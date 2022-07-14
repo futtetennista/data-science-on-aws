@@ -32,3 +32,12 @@ model.tar.gz
 wip/99_usecases/amazon_reviews_us_Digital_Software_v1_00_comprehend.csv
 wip/99_usecases/output.tar.gz
 wip/99_usecases/output/
+.vscode/
+
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
