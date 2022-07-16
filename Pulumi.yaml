@@ -1,0 +1,6 @@
+name: data-science-on-aws
+runtime:
+  name: nodejs
+  options:
+    typescript: true
+description: Data Science on AWS
