@@ -41,3 +41,6 @@ wip/99_usecases/output/
 !.yarn/releases
 !.yarn/sdks
 !.yarn/versions
+
+bin/
+node_modules/
