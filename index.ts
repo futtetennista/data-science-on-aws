@@ -2,42 +2,19 @@ import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 // import * as awsx from "@pulumi/awsx";
 
-const gDataScience = new aws.iam.Group("gDataScience", {
+const gDataScience = new aws.iam.Group("dsoaws", {
      /* path: "/users/", */
-     name: "DataScience",
+     name: "DSOAWS",
 });
 
 export const gDataScienceARN = pulumi.interpolate`${gDataScience.arn}`;
 export const gDataSciencePath = pulumi.interpolate`${gDataScience.path}`;
 
-const gpDataScience = new aws.iam.GroupPolicy("gpDataScience", {
-    group: gDataScience.name,
-    policy: {
-        Version: "2012-10-17",
-        Statement: [
-            {
-                Sid: "PermissionToAssumeDataScienceOnAWS",
-                Effect: "Allow",
-                Action: ["sts:AssumeRole"],
-                Resource: "arn:aws:iam::801881713728:role/DataScienceOnAWS"
-            }
-        ]
-    },
-});
-
-export const gpDataScienceId = pulumi.interpolate`${gpDataScience.id}`;
-
-const gmDataScience = new aws.iam.GroupMembership("gmDataScience", {
-    users: [
-        "dataeng", // pre-existing user in AWS
+const rDataScience = new aws.iam.Role("dsoaws", {
+    name: "DSOAWS",
+    managedPolicyArns: [
+        'arn:aws:iam::aws:policy/AdministratorAccess',
     ],
-    group: gDataScience.name,
-});
-
-export const gmDataScienceId = pulumi.interpolate`${gmDataScience.id}`;
-
-const rDataScience = new aws.iam.Role("rDataScience", {
-    name: "DataScienceOnAWS_pulumi",
     assumeRolePolicy: {
         Version: "2012-10-17",
         Statement: [
@@ -61,21 +38,44 @@ const rDataScience = new aws.iam.Role("rDataScience", {
 
 export const rDataScienceARN = pulumi.interpolate`${rDataScience.arn}`;
 
-// const rpaAssumeRoleDataScienceOnAWSAttachment = new aws.iam.RolePolicyAttachment( "rpaDataScienceOnAWS", {
-//     role: "DataScienceOnAWS",
-//     policyArn: pAssumeRoleDataScienceOnAWS.arn,
-// });
+const gpDataScience = new aws.iam.GroupPolicy("dsoaws", {
+    group: gDataScience.name,
+    name: "DSOAWS",
+    policy: {
+        Version: "2012-10-17",
+        Statement: [
+            {
+                Sid: "PermissionToAssumeDataScienceOnAWS",
+                Effect: "Allow",
+                Action: ["sts:AssumeRole"],
+                Resource: rDataScience.arn, // "arn:aws:iam::801881713728:role/DataScienceOnAWS"
+            }
+        ]
+    },
+});
+
+export const gpDataScienceId = pulumi.interpolate`${gpDataScience.id}`;
+
+const gmDataScience = new aws.iam.GroupMembership("dsoaws", {
+    users: [
+        "dataeng", // pre-existing user in AWS
+    ],
+    group: gDataScience.name,
+});
+
+export const gmDataScienceId = pulumi.interpolate`${gmDataScience.id}`;
 
 // Set up S3 buckets
-// const current = aws.getCallerIdentity({});
-// const accountId = await current.then(current => current.accountId);
+const current = aws.getCallerIdentity({});
+export const accountId = current.then(current => current.accountId);
 
 const bucket = new aws.s3.Bucket("bucket", {
     acl: "private",
     tags: {
         Environment: "Dev",
     },
-    bucket: `data-science-on-aws-801881713728`,
+    forceDestroy: true,
+    bucket: pulumi.output(current).apply(c => `dsoaws-${c.accountId}`),
 });
 
 export const bucketARN = pulumi.interpolate`${bucket.arn}`
@@ -113,10 +113,16 @@ export const bucketARN = pulumi.interpolate`${bucket.arn}`
 
 // export const bucketAthenaARN = pulumi.interpolate`${bucketAthena.arn}`;
 
-const dbAthena = new aws.athena.Database("dbAthena", {
-    name: "dsoaws_pulumi",
-    bucket: bucket.id,
-});
+const dbAthena = new aws.athena.Database(
+    "athena",
+    {
+        name: "dsoaws",
+        bucket: bucket.id,
+    },
+    {
+        dependsOn: bucket,
+    },
+);
 
 export const dbAthenaId = pulumi.interpolate`${dbAthena.id}`;
 
@@ -174,8 +180,8 @@ export const dbAthenaId = pulumi.interpolate`${dbAthena.id}`;
 // export const npCreateDatabaseTableParquetId = pulumi.interpolate`${nqCreateDatabaseTableParquet.id}`;
 
 // 06_Create_Redshift_Cluster.ipynb
-const rRedshift = new aws.iam.Role("rRedshift", {
-    name: 'DSOAWS_Redshift_pulumi',
+const rRedshift = new aws.iam.Role("redshift", {
+    name: 'DSOAWS_Redshift',
     assumeRolePolicy: {
         Version: "2012-10-17",
         Statement: [
@@ -200,7 +206,7 @@ const rRedshift = new aws.iam.Role("rRedshift", {
 export const roleRedshiftARN = pulumi.interpolate`${rRedshift.arn}`;
 
 // Create Self-Managed Policies
-const pRedshiftToS3 = new aws.iam.RolePolicy("pRedshiftToS3", {
+const pRedshiftToS3 = new aws.iam.RolePolicy("redshift-to-s3", {
     role: rRedshift,
     policy: {
         Version: "2012-10-17",
@@ -214,8 +220,8 @@ const pRedshiftToS3 = new aws.iam.RolePolicy("pRedshiftToS3", {
     },
 })
 
-const pRedshiftAthena = new aws.iam.RolePolicy("pRedshiftAthena", {
-    name: "DSOAWS_RedshiftPolicyToAthena_pulumi",
+const pRedshiftAthena = new aws.iam.RolePolicy("redshift-to-athena", {
+    name: "DSOAWS_RedshiftPolicyToAthena",
     role: rRedshift,
     policy: `{
         "Version": "2012-10-17",
@@ -327,8 +333,8 @@ const pRedshiftAthena = new aws.iam.RolePolicy("pRedshiftAthena", {
     }`,
 });
 
-const pSagemaker = new aws.iam.RolePolicy("pSagemaker", {
-    name: "DSOAWS_RedshiftPolicyToSageMaker_pulumi",
+const pSagemaker = new aws.iam.RolePolicy("redshift-to-sagemaker", {
+    name: "DSOAWS_RedshiftPolicyToSageMaker",
     role: rRedshift,
     policy: {
         Version: "2012-10-17",
@@ -342,8 +348,8 @@ const pSagemaker = new aws.iam.RolePolicy("pSagemaker", {
     },
 });
 
-const pPassRoleSagemaker = new aws.iam.RolePolicy("pPassRoleSagemaker", {
-    name: 'DSOAWS_RedshiftPolicyToSageMakerPassRole_pulumi',
+const pPassRoleSagemaker = new aws.iam.RolePolicy("redshift-psss-role-to-sagemaker", {
+    name: 'DSOAWS_RedshiftPolicyToSageMakerPassRole',
     role: rRedshift,
     policy: {
         Version: "2012-10-17",
