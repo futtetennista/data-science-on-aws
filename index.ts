@@ -1,84 +1,93 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
+import { Bucket } from "@pulumi/aws/s3";
 // import * as awsx from "@pulumi/awsx";
 
-const gDataScience = new aws.iam.Group("dsoaws", {
-     /* path: "/users/", */
-     name: "DSOAWS",
-});
+const ch0 = () => {
+  const groupDataScience = new aws.iam.Group("dsoaws", {
+    /* path: "/users/", */
+    name: "DSOAWS",
+  });
 
-export const gDataScienceARN = pulumi.interpolate`${gDataScience.arn}`;
-export const gDataSciencePath = pulumi.interpolate`${gDataScience.path}`;
-
-const rDataScience = new aws.iam.Role("dsoaws", {
+  const roleDataScience = new aws.iam.Role("dsoaws", {
     name: "DSOAWS",
     managedPolicyArns: [
-        'arn:aws:iam::aws:policy/AdministratorAccess',
+      'arn:aws:iam::aws:policy/AdministratorAccess',
     ],
     assumeRolePolicy: {
-        Version: "2012-10-17",
-        Statement: [
-            {
-                Effect: "Allow",
-                Principal: {
-                    Service: "sagemaker.amazonaws.com"
-                },
-                Action: "sts:AssumeRole"
-            },
-            {
-                Effect: "Allow",
-                Principal: {
-                    AWS: "arn:aws:iam::801881713728:user/dataeng"
-                },
-                Action: "sts:AssumeRole"
-            }
-        ]
+      Version: "2012-10-17",
+      Statement: [
+        {
+          Effect: "Allow",
+          Principal: {
+            Service: "sagemaker.amazonaws.com"
+          },
+          Action: "sts:AssumeRole"
         },
-});
+        {
+          Effect: "Allow",
+          Principal: {
+            AWS: "arn:aws:iam::801881713728:user/dataeng"
+          },
+          Action: "sts:AssumeRole"
+        }
+      ]
+    },
+  });
 
-export const rDataScienceARN = pulumi.interpolate`${rDataScience.arn}`;
-
-const gpDataScience = new aws.iam.GroupPolicy("dsoaws", {
-    group: gDataScience.name,
+  const groupPolicyDataScience = new aws.iam.GroupPolicy("dsoaws", {
+    group: groupDataScience.name,
     name: "DSOAWS",
     policy: {
-        Version: "2012-10-17",
-        Statement: [
-            {
-                Sid: "PermissionToAssumeDataScienceOnAWS",
-                Effect: "Allow",
-                Action: ["sts:AssumeRole"],
-                Resource: rDataScience.arn, // "arn:aws:iam::801881713728:role/DataScienceOnAWS"
-            }
-        ]
+      Version: "2012-10-17",
+      Statement: [
+        {
+          Sid: "PermissionToAssumeDataScienceOnAWS",
+          Effect: "Allow",
+          Action: ["sts:AssumeRole"],
+          Resource: roleDataScience.arn, // "arn:aws:iam::801881713728:role/DataScienceOnAWS"
+        }
+      ]
     },
-});
+  });
 
-export const gpDataScienceId = pulumi.interpolate`${gpDataScience.id}`;
-
-const gmDataScience = new aws.iam.GroupMembership("dsoaws", {
+  const groupMembershipDataScience = new aws.iam.GroupMembership("dsoaws", {
     users: [
-        "dataeng", // pre-existing user in AWS
+      "dataeng", // pre-existing user in AWS
     ],
-    group: gDataScience.name,
-});
+    group: groupDataScience.name,
+  });
 
-export const gmDataScienceId = pulumi.interpolate`${gmDataScience.id}`;
+  return {
+    groupARNDataScience: pulumi.interpolate`${groupDataScience.arn}`,
+    // groupPathDataScience: pulumi.interpolate`${groupDataScience.path}`,
+    roleARNDataScience: pulumi.interpolate`${roleDataScience.arn}`,
+    groupPolicyIdDataScience: pulumi.interpolate`${groupPolicyDataScience.id}`,
+    groupMembershipIdDataScience: pulumi.interpolate`${groupMembershipDataScience.id}`,
+  }
+}
 
-// Set up S3 buckets
-const current = aws.getCallerIdentity({});
-export const accountId = current.then(current => current.accountId);
+const ch01_02 = (): { bucketDefaultSageMaker: Bucket } => {
+  // Set up S3 buckets
+  const callerId = aws.getCallerIdentity({});
+  // export const accountId = callerId.then(current => current.accountId);
+  const region = aws.getRegion();
 
-const bucket = new aws.s3.Bucket("bucket", {
+  const bucketDefaultSageMaker = new aws.s3.Bucket("sage-maker-default", {
     acl: "private",
     tags: {
-        Environment: "Dev",
+      Environment: "Dev",
     },
     forceDestroy: true,
-    bucket: pulumi.output(current).apply(c => `dsoaws-${c.accountId}`),
-});
+    bucket: pulumi.all([callerId, region]).apply(([c, r]) =>
+      `sagemaker-${r.name}-${c.accountId}`
+    ),
+  });
 
-export const bucketARN = pulumi.interpolate`${bucket.arn}`
+  return {
+    bucketDefaultSageMaker: bucketDefaultSageMaker,
+  }
+}
 
 // const bucketTSV = new aws.s3.Bucket("AmazonReviewsTSV", {
 //     acl: "private",
@@ -113,18 +122,22 @@ export const bucketARN = pulumi.interpolate`${bucket.arn}`
 
 // export const bucketAthenaARN = pulumi.interpolate`${bucketAthena.arn}`;
 
-const dbAthena = new aws.athena.Database(
+const ch_04_02 = (bucket: Bucket) => {
+  const dbAthena = new aws.athena.Database(
     "athena",
     {
-        name: "dsoaws",
-        bucket: bucket.id,
+      name: "dsoaws",
+      bucket: bucket.id,
     },
     {
-        dependsOn: bucket,
+      dependsOn: bucket,
     },
-);
+  );
 
-export const dbAthenaId = pulumi.interpolate`${dbAthena.id}`;
+  return {
+    dbAthenaId: pulumi.interpolate`${dbAthena.id}`,
+  }
+}
 
 // const bucketTSV = 's3://sagemaker-eu-west-1-801881713728/amazon-reviews-pds/tsv';
 // const bucketParquet = 's3://sagemaker-eu-west-1-801881713728/amazon-reviews-pds/parquet';
@@ -180,191 +193,237 @@ export const dbAthenaId = pulumi.interpolate`${dbAthena.id}`;
 // export const npCreateDatabaseTableParquetId = pulumi.interpolate`${nqCreateDatabaseTableParquet.id}`;
 
 // 06_Create_Redshift_Cluster.ipynb
-const rRedshift = new aws.iam.Role("redshift", {
+const ch04_06 = () => {
+  const roleRedshift = new aws.iam.Role("redshift", {
     name: 'DSOAWS_Redshift',
     assumeRolePolicy: {
-        Version: "2012-10-17",
-        Statement: [
-            {
-                Effect: "Allow",
-                Action: "sts:AssumeRole",
-                Principal: {
-                    Service: "redshift.amazonaws.com",
-                },
-            },
-            {
-              Effect: "Allow",
-              Principal: {
-                Service: "sagemaker.amazonaws.com"
-              },
-              Action: "sts:AssumeRole"
-            }
-        ]
+      Version: "2012-10-17",
+      Statement: [
+        {
+          Effect: "Allow",
+          Action: "sts:AssumeRole",
+          Principal: {
+            Service: "redshift.amazonaws.com",
+          },
+        },
+        {
+          Effect: "Allow",
+          Principal: {
+            Service: "sagemaker.amazonaws.com"
+          },
+          Action: "sts:AssumeRole"
+        }
+      ]
     },
-});
+  });
 
-export const roleRedshiftARN = pulumi.interpolate`${rRedshift.arn}`;
-
-// Create Self-Managed Policies
-const pRedshiftToS3 = new aws.iam.RolePolicy("redshift-to-s3", {
-    role: rRedshift,
+  // Create Self-Managed Policies
+  const rolePolicyRedshiftToS3 = new aws.iam.RolePolicy("redshift-to-s3", {
+    role: roleRedshift,
     policy: {
-        Version: "2012-10-17",
-        Statement: [
-            {
-                Effect: "Allow",
-                Action: "s3:*",
-                Resource: "*"
-            }
-        ]
+      Version: "2012-10-17",
+      Statement: [
+        {
+          Effect: "Allow",
+          Action: "s3:*",
+          Resource: "*"
+        }
+      ]
     },
-})
+  })
 
-const pRedshiftAthena = new aws.iam.RolePolicy("redshift-to-athena", {
+  const rolePolicyRedshiftToAthena = new aws.iam.RolePolicy("redshift-to-athena", {
     name: "DSOAWS_RedshiftPolicyToAthena",
-    role: rRedshift,
+    role: roleRedshift,
     policy: `{
-        "Version": "2012-10-17",
-        "Statement": [
-            {
-                "Effect": "Allow",
-                "Action": [
-                    "athena:*"
-                ],
-                "Resource": [
-                    "*"
-                ]
-            },
-            {
-                "Effect": "Allow",
-                "Action": [
-                    "glue:CreateDatabase",
-                    "glue:DeleteDatabase",
-                    "glue:GetDatabase",
-                    "glue:GetDatabases",
-                    "glue:UpdateDatabase",
-                    "glue:CreateTable",
-                    "glue:DeleteTable",
-                    "glue:BatchDeleteTable",
-                    "glue:UpdateTable",
-                    "glue:GetTable",
-                    "glue:GetTables",
-                    "glue:BatchCreatePartition",
-                    "glue:CreatePartition",
-                    "glue:DeletePartition",
-                    "glue:BatchDeletePartition",
-                    "glue:UpdatePartition",
-                    "glue:GetPartition",
-                    "glue:GetPartitions",
-                    "glue:BatchGetPartition"
-                ],
-                "Resource": [
-                    "*"
-                ]
-            },
-            {
-                "Effect": "Allow",
-                "Action": [
-                    "s3:GetBucketLocation",
-                    "s3:GetObject",
-                    "s3:ListBucket",
-                    "s3:ListBucketMultipartUploads",
-                    "s3:ListMultipartUploadParts",
-                    "s3:AbortMultipartUpload",
-                    "s3:CreateBucket",
-                    "s3:PutObject"
-                ],
-                "Resource": [
-                    "arn:aws:s3:::aws-athena-query-results-*"
-                ]
-            },
-            {
-                "Effect": "Allow",
-                "Action": [
-                    "s3:GetObject",
-                    "s3:ListBucket"
-                ],
-                "Resource": [
-                    "arn:aws:s3:::athena-examples*"
-                ]
-            },
-            {
-                "Effect": "Allow",
-                "Action": [
-                    "s3:ListBucket",
-                    "s3:GetBucketLocation",
-                    "s3:ListAllMyBuckets"
-                ],
-                "Resource": [
-                    "*"
-                ]
-            },
-            {
-                "Effect": "Allow",
-                "Action": [
-                    "sns:ListTopics",
-                    "sns:GetTopicAttributes"
-                ],
-                "Resource": [
-                    "*"
-                ]
-            },
-            {
-                "Effect": "Allow",
-                "Action": [
-                    "cloudwatch:PutMetricAlarm",
-                    "cloudwatch:DescribeAlarms",
-                    "cloudwatch:DeleteAlarms"
-                ],
-                "Resource": [
-                    "*"
-                ]
-            },
-            {
-                "Effect": "Allow",
-                "Action": [
-                    "lakeformation:GetDataAccess"
-                ],
-                "Resource": [
-                    "*"
-                ]
-            }
-        ]
-    }`,
-});
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Action": [
+                        "athena:*"
+                    ],
+                    "Resource": [
+                        "*"
+                    ]
+                },
+                {
+                    "Effect": "Allow",
+                    "Action": [
+                        "glue:CreateDatabase",
+                        "glue:DeleteDatabase",
+                        "glue:GetDatabase",
+                        "glue:GetDatabases",
+                        "glue:UpdateDatabase",
+                        "glue:CreateTable",
+                        "glue:DeleteTable",
+                        "glue:BatchDeleteTable",
+                        "glue:UpdateTable",
+                        "glue:GetTable",
+                        "glue:GetTables",
+                        "glue:BatchCreatePartition",
+                        "glue:CreatePartition",
+                        "glue:DeletePartition",
+                        "glue:BatchDeletePartition",
+                        "glue:UpdatePartition",
+                        "glue:GetPartition",
+                        "glue:GetPartitions",
+                        "glue:BatchGetPartition"
+                    ],
+                    "Resource": [
+                        "*"
+                    ]
+                },
+                {
+                    "Effect": "Allow",
+                    "Action": [
+                        "s3:GetBucketLocation",
+                        "s3:GetObject",
+                        "s3:ListBucket",
+                        "s3:ListBucketMultipartUploads",
+                        "s3:ListMultipartUploadParts",
+                        "s3:AbortMultipartUpload",
+                        "s3:CreateBucket",
+                        "s3:PutObject"
+                    ],
+                    "Resource": [
+                        "arn:aws:s3:::aws-athena-query-results-*"
+                    ]
+                },
+                {
+                    "Effect": "Allow",
+                    "Action": [
+                        "s3:GetObject",
+                        "s3:ListBucket"
+                    ],
+                    "Resource": [
+                        "arn:aws:s3:::athena-examples*"
+                    ]
+                },
+                {
+                    "Effect": "Allow",
+                    "Action": [
+                        "s3:ListBucket",
+                        "s3:GetBucketLocation",
+                        "s3:ListAllMyBuckets"
+                    ],
+                    "Resource": [
+                        "*"
+                    ]
+                },
+                {
+                    "Effect": "Allow",
+                    "Action": [
+                        "sns:ListTopics",
+                        "sns:GetTopicAttributes"
+                    ],
+                    "Resource": [
+                        "*"
+                    ]
+                },
+                {
+                    "Effect": "Allow",
+                    "Action": [
+                        "cloudwatch:PutMetricAlarm",
+                        "cloudwatch:DescribeAlarms",
+                        "cloudwatch:DeleteAlarms"
+                    ],
+                    "Resource": [
+                        "*"
+                    ]
+                },
+                {
+                    "Effect": "Allow",
+                    "Action": [
+                        "lakeformation:GetDataAccess"
+                    ],
+                    "Resource": [
+                        "*"
+                    ]
+                }
+            ]
+        }`,
+  });
 
-const pSagemaker = new aws.iam.RolePolicy("redshift-to-sagemaker", {
+  const rolePolicyRedshiftToSagemaker = new aws.iam.RolePolicy("redshift-to-sagemaker", {
     name: "DSOAWS_RedshiftPolicyToSageMaker",
-    role: rRedshift,
+    role: roleRedshift,
     policy: {
-        Version: "2012-10-17",
-        Statement: [
-            {
-                Effect: "Allow",
-                Action: "sagemaker:*",
-                Resource: "*"
-            }
-        ]
+      Version: "2012-10-17",
+      Statement: [
+        {
+          Effect: "Allow",
+          Action: "sagemaker:*",
+          Resource: "*"
+        }
+      ]
     },
-});
+  });
 
-const pPassRoleSagemaker = new aws.iam.RolePolicy("redshift-psss-role-to-sagemaker", {
+  const rolePolicyPassRoleSagemaker = new aws.iam.RolePolicy("redshift-pass-role-to-sagemaker", {
     name: 'DSOAWS_RedshiftPolicyToSageMakerPassRole',
-    role: rRedshift,
+    role: roleRedshift,
     policy: {
-        Version: "2012-10-17",
-        Statement: [
-            {
-                Effect: "Allow",
-                Action: "iam:PassRole",
-                Resource: 'arn:aws:iam::801881713728:role/*',
-            }
-        ]
+      Version: "2012-10-17",
+      Statement: [
+        {
+          Effect: "Allow",
+          Action: "iam:PassRole",
+          Resource: 'arn:aws:iam::801881713728:role/*',
+        }
+      ]
     },
-});
+  });
 
-// const rpaAssumeRoleRedshift2Sagemaker = new aws.iam.RolePolicyAttachment("rpaAssumeRoleRedshift2Sagemaker", {
-//     role: rRedshift.name,
-//     policyArn: pAssumeRoleRedshift2Sagemaker.arn,
-// });
+  const secretRedshift = new aws.secretsmanager.Secret("redshift", {
+    name: 'dsoaws_redshift_login_1',
+    description: 'DSOAWS Redshift Login',
+    // tags: {
+    //     "Key": "name",
+    //     "Value": "dsoaws_redshift_login",
+    // },
+    recoveryWindowInDays: 0
+  });
 
+  const config = new pulumi.Config();
+  const usernameRedshift = config.require("redshift_username");
+  const passwordRedshift = config.requireSecret("redshift_password");
+
+  const secretVersionRedshift = new aws.secretsmanager.SecretVersion("redshift", {
+    secretId: secretRedshift.id,
+    secretString: `[{"username":"${usernameRedshift}"},{"password":"${passwordRedshift}"}]`,
+  });
+
+
+  const svRedshiftOut = aws.secretsmanager.getSecretVersionOutput({
+    secretId: secretRedshift.id
+  });
+
+  const clusterRedshift = new aws.redshift.Cluster("redshift", {
+    // # Note that only some Instance Types support Redshift Query Editor
+    // # (https://docs.aws.amazon.com/redshift/latest/mgmt/query-editor.html)
+    clusterIdentifier: "dsoaws",
+    clusterType: "multi-node",
+    databaseName: "dsoaws",
+    masterUsername: svRedshiftOut.secretString.apply(s => JSON.parse(s)[0].username),
+    masterPassword: svRedshiftOut.secretString.apply(s => JSON.parse(s)[1].password),
+    nodeType: "dc2.large",
+    numberOfNodes: 2,
+    // Remove snapshotting as this is not a prod instance
+    applyImmediately: true,
+    automatedSnapshotRetentionPeriod: 0,
+    skipFinalSnapshot: true,
+  });
+
+  return {
+    clusterARNRedshift: pulumi.interpolate`${clusterRedshift.arn}`,
+    roleARNRedshift: pulumi.interpolate`${roleRedshift.arn}`,
+    secretIdRedshift: secretRedshift.id,
+    secretVersionARNRedshift: pulumi.interpolate`${secretVersionRedshift.arn}`,
+  };
+}
+
+ch0();
+const { bucketDefaultSageMaker } = ch01_02();
+ch_04_02(bucketDefaultSageMaker);
+// ch04_06();

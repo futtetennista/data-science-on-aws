@@ -34,13 +34,12 @@ wip/99_usecases/output.tar.gz
 wip/99_usecases/output/
 .vscode/
 
-.pnp.*
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/sdks
-!.yarn/versions
-
-bin/
-node_modules/
+pulumi/.pnp.*
+pulumi/.yarn/*
+pulumi/!.yarn/patches
+pulumi/!.yarn/plugins
+pulumi/!.yarn/releases
+pulumi/!.yarn/sdks
+pulumi/!.yarn/versions
+pulumi/bin/
+pulumi/node_modules/

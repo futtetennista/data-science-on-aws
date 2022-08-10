@@ -1,0 +1,5 @@
+config:
+  data-science-on-aws:redshift_password:
+    secure: AAABAAFj/EATkpo0iGfo37G8pxnLYd9dN+qShVLh9UZ2sDVssisyhRFwaw==
+  data-science-on-aws:redshift_username:
+    secure: AAABAJ7JcGJD3HQkV2CAQvk+S68wEoX7KR/1svZg12M5w8PjBSs=
